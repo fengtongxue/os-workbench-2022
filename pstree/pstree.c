@@ -14,7 +14,12 @@
 #define Len 1024
 #define MAX_LINE_LENGTH 80
 
+int processLen = 0;
+
 struct dirent *processList[Len] = {0};
+struct pNode *pNodeList[Len] = {0};
+
+struct pNode *ROOT;
 
 // Todo 解析 argv
 
@@ -34,14 +39,51 @@ typedef struct pNode
   pid_t ppid;
   char *pName;
   struct pNode *childs[Len];
+  int childLen;
 } pNode;
 
-void printNode(pNode* node) 
+void printNode(pNode *node, int ident)
 {
-  printf("pid: %d\n", node->pid);
-  printf("pname: %s\n", node->pName);
-  printf("ppid: %d\n", node->ppid);
+  switch (ident)
+  {
+  case 0:
+    printf("pid: %10d\n", node->pid);
+    break;
+  case 1:
+    printf("pid: %20d\n", node->pid);
+    break;
+  case 2:
+    printf("pid: %30d\n", node->pid);
+    break;
+  case 3:
+    printf("pid: %40d\n", node->pid);
+    break;
+  default:
+    printf("pid: %50d\n", node->pid);
+    break;
+  }
+  // printf("pid: ", node->pid);
+  // printf("pname: %s", node->pName);
+  // printf("ppid: %d\n", node->ppid);
+  // printf("childs Len: %d\n", node->childLen);
+}
 
+void printTree(pNode *node, int ident)
+{
+  printNode(node, ident);
+
+  // 如果是叶子结点
+  if (node->childLen == 0)
+  {
+    return;
+  }
+
+  // 如果有孩子子节点
+  int nextIdent = ident + 1;
+  for (size_t i = 0; i < node->childLen; i++)
+  {
+    printTree(node->childs[i], nextIdent);
+  }
 }
 
 void parseLine(pNode *node, char line[])
@@ -64,7 +106,7 @@ void parseLine(pNode *node, char line[])
       findColon = true;
       continue;
     }
-    if (c == ' '|| c == '\t')
+    if (c == ' ' || c == '\t')
     {
       continue;
     }
@@ -108,7 +150,6 @@ pNode *newPnode(struct dirent *entry)
   while (fgets(line, MAX_LINE_LENGTH, file))
   {
     /* Print each line */
-    // printf("line[%06d]: %s", ++line_count, line);
     if (line[strlen(line) - 1] == '\n')
     {
       parseLine(p, line);
@@ -123,20 +164,46 @@ pNode *newPnode(struct dirent *entry)
   return p;
 }
 
+void parseChildNode(pNode *parent)
+{
+  int childsIndex = 0;
+  for (size_t i = 0; i < processLen; i++)
+  {
+    pNode *node = pNodeList[i];
+    if (node->ppid == parent->pid)
+    {
+      parent->childs[childsIndex++] = node;
+      node->parent = parent;
+    }
+  }
+  parent->childLen = childsIndex;
+  for (size_t i = 0; i < parent->childLen; i++)
+  {
+    pNode *childNode = parent->childs[i];
+    parseChildNode(childNode);
+  }
+}
+
 void parseTree()
 {
-  for (size_t i = 0; i < Len; i++)
+  for (size_t i = 0; i < processLen; i++)
   {
     struct dirent *entry = processList[i];
     pNode *node = newPnode(entry);
-    printNode(node);
-    return;
-    // if (entry == 0) {
-    //   continue;
-    // } else {
-
-    // }
+    pNodeList[i] = node;
   }
+
+  for (size_t i = 0; i < processLen; i++)
+  {
+    pNode *node = pNodeList[i];
+    if (node->ppid == 0)
+    {
+      ROOT = node;
+    }
+  }
+
+  parseChildNode(ROOT);
+  printTree(ROOT, 0);
 }
 
 bool isDigitString(char *s)
@@ -172,11 +239,10 @@ void walk()
       }
     }
   }
+  processLen = offset;
 
   closedir(dp);
 }
-
-
 
 void printDirent()
 {
